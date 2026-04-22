@@ -21,37 +21,41 @@ int main(){
     vector<pair<int,int>> edges; edges.reserve(m);
     for(int i=0;i<m;++i){ int a,b; cin>>a>>b; edges.emplace_back(a,b); }
 
-    // Build Gomory-Hu tree with n-1 maxflow computations
-    vector<int> parent(n+1,1), w(n+1,0);
-    for(int i=2;i<=n;++i) parent[i]=1;
-
-    auto build_flow = [&](int s, int t, vector<int> &reach, long long &val){
-        EK D(n);
-        for(auto &e:edges){ int u=e.first, v=e.second; D.add_und(u,v,1); }
-        val = D.maxflow_limited(s,t,3);
-        auto vis = D.reachable_from(s);
-        reach.swap(vis);
-    };
-
-    for(int i=2;i<=n;++i){
-        int s=i, t=parent[i];
-        vector<int> reach; long long val=0;
-        build_flow(s,t,reach,val);
-        w[i]=(int)val;
-        for(int v=1; v<i; ++v){
-            if(parent[v]==t && reach[v]) parent[v]=i;
+    // Build cut tree using Stoer–Wagner phases
+    int N = n;
+    vector<vector<int>> W(N, vector<int>(N, 0));
+    for(auto &e: edges){ int u=e.first-1, v=e.second-1; ++W[u][v]; ++W[v][u]; }
+    vector<int> verts(N); iota(verts.begin(), verts.end(), 0);
+    vector<int> parent_idx(N, -1), weight_cut(N, 0);
+    while((int)verts.size() > 1){
+        int m = verts.size();
+        vector<int> added(N, 0), wsum(N, 0);
+        int s = verts[0], t = -1;
+        for(int itc=0; itc<m; ++itc){
+            int sel = -1;
+            for(int v: verts){ if(!added[v] && (sel==-1 || wsum[v] > wsum[sel])) sel=v; }
+            if(sel==-1) break;
+            added[sel] = 1;
+            if(itc == m-1){
+                t = sel;
+                break;
+            }
+            s = sel;
+            for(int v: verts){ if(!added[v]) wsum[v] += W[sel][v]; }
         }
-        if(reach[parent[t]]){
-            parent[i]=parent[t];
-            parent[t]=i;
-            w[i]=w[t];
-            w[t]=(int)val;
-        }
+        int cutval = 0;
+        for(int v: verts) if(v!=t) cutval += W[t][v];
+        parent_idx[t] = s;
+        weight_cut[t] = cutval;
+        // merge t into s
+        for(int v: verts){ if(v!=s && v!=t){ W[s][v] += W[t][v]; W[v][s] = W[s][v]; } }
+        // remove t from verts
+        verts.erase(find(verts.begin(), verts.end(), t));
     }
 
     struct E{int u,v,w;};
     vector<E> tree; tree.reserve(n-1);
-    for(int i=2;i<=n;++i) tree.push_back({i,parent[i],w[i]});
+    for(int v=0; v<N; ++v){ if(parent_idx[v] != -1){ tree.push_back({v+1, parent_idx[v]+1, weight_cut[v]}); } }
 
     sort(tree.begin(), tree.end(), [](const E&A,const E&B){return A.w>B.w;});
     vector<int> uf(n+1); iota(uf.begin(), uf.end(), 0);
