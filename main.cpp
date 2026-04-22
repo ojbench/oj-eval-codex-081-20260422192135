@@ -1,61 +1,16 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-struct Dinic {
+struct EK {
     struct Edge { int to; int cap; int rev; };
-    int N;
-    vector<vector<Edge>> G;
-    vector<int> level, it;
-    Dinic(int n=0){ init(n); }
+    int N; vector<vector<Edge>> G;
+    EK(int n=0){ init(n); }
     void init(int n){ N=n; G.assign(N+1, {}); }
-    void add_edge(int u,int v,int c){
-        Edge a{v,c,(int)G[v].size()};
-        Edge b{u,0,(int)G[u].size()};
-        G[u].push_back(a);
-        G[v].push_back(b);
-    }
-    bool bfs(int s,int t){
-        level.assign(N+1,-1);
-        queue<int> q; level[s]=0; q.push(s);
-        while(!q.empty()){
-            int u=q.front(); q.pop();
-            for(const auto &e:G[u]) if(e.cap>0 && level[e.to]<0){
-                level[e.to]=level[u]+1;
-                q.push(e.to);
-            }
-        }
-        return level[t]>=0;
-    }
-    int dfs(int u,int t,int f){
-        if(!f || u==t) return f;
-        for(int &i=it[u]; i<(int)G[u].size(); ++i){
-            Edge &e=G[u][i];
-            if(e.cap>0 && level[e.to]==level[u]+1){
-                int ret=dfs(e.to,t,min(f,e.cap));
-                if(ret){ e.cap-=ret; G[e.to][e.rev].cap+=ret; return ret; }
-            }
-        }
-        return 0;
-    }
-    long long maxflow(int s,int t){
-        long long flow=0; const int INF=1e9;
-        while(bfs(s,t)){
-            it.assign(N+1,0);
-            while(int f=dfs(s,t,INF)) flow+=f;
-        }
-        return flow;
-    }
-    vector<int> reachable_from(int s){
-        vector<int> vis(N+1,0);
-        stack<int> st; st.push(s); vis[s]=1;
-        while(!st.empty()){
-            int u=st.top(); st.pop();
-            for(const auto &e:G[u]) if(e.cap>0 && !vis[e.to]){
-                vis[e.to]=1; st.push(e.to);
-            }
-        }
-        return vis;
-    }
+    void add_dir(int u,int v,int c){ Edge a{v,c,(int)G[v].size()}, b{u,0,(int)G[u].size()}; G[u].push_back(a); G[v].push_back(b); }
+    void add_und(int u,int v,int c){ add_dir(u,v,c); add_dir(v,u,c); }
+    int maxflow_limited(int s,int t,int limit){ int flow=0; while(flow<limit){ vector<pair<int,int>> pre(N+1, {-1,-1}); queue<int> q; pre[s]={-2,-1}; q.push(s); while(!q.empty() && pre[t].first==-1){ int u=q.front(); q.pop(); for(int i=0;i<(int)G[u].size();++i){ auto &e=G[u][i]; if(e.cap>0 && pre[e.to].first==-1){ pre[e.to] = {u,i}; q.push(e.to); if(e.to==t) break; } } } if(pre[t].first==-1) break; int v=t; while(v!=s){ auto [u,idx] = pre[v]; auto &e = G[u][idx]; auto &rev = G[v][e.rev]; e.cap -= 1; rev.cap += 1; v = u; } ++flow; }
+        return flow; }
+    vector<int> reachable_from(int s){ vector<int> vis(N+1,0); queue<int> q; vis[s]=1; q.push(s); while(!q.empty()){ int u=q.front(); q.pop(); for(const auto &e:G[u]) if(e.cap>0 && !vis[e.to]){ vis[e.to]=1; q.push(e.to);} } return vis; }
 };
 
 int main(){
@@ -71,9 +26,9 @@ int main(){
     for(int i=2;i<=n;++i) parent[i]=1;
 
     auto build_flow = [&](int s, int t, vector<int> &reach, long long &val){
-        Dinic D(n);
-        for(auto &e:edges){ int u=e.first, v=e.second; D.add_edge(u,v,1); D.add_edge(v,u,1); }
-        val = D.maxflow(s,t);
+        EK D(n);
+        for(auto &e:edges){ int u=e.first, v=e.second; D.add_und(u,v,1); }
+        val = D.maxflow_limited(s,t,3);
         auto vis = D.reachable_from(s);
         reach.swap(vis);
     };
@@ -83,8 +38,8 @@ int main(){
         vector<int> reach; long long val=0;
         build_flow(s,t,reach,val);
         w[i]=(int)val;
-        for(int v=1; v<=n; ++v){
-            if(v!=i && parent[v]==t && reach[v]) parent[v]=i;
+        for(int v=1; v<i; ++v){
+            if(parent[v]==t && reach[v]) parent[v]=i;
         }
         if(reach[parent[t]]){
             parent[i]=parent[t];
